@@ -1,18 +1,16 @@
-from datetime import date
+from datetime import datetime
 from dateutil.relativedelta import relativedelta
+from dateutil.parser import parse
 from fuzzywuzzy import process
 
 import discord
 import os
+import json
 import requests
 
 from discord.ext.commands import Bot
 from re import sub
 
-CONNECTED_REALMS_INDEX_UPDATE = None
-CONNECTED_REALM_DETAIL = []
-CONNECTED_REALMS_ID = None
-REALM_NAME = None
 description = "WoW Search"
 bot_character = "wow-character!"
 bot_guild = "wow-guild!"
@@ -29,11 +27,6 @@ client = Bot(command_prefix=bot_character, description=description)
 
 @client.event
 async def on_message(message):
-    global CONNECTED_REALMS_INDEX_UPDATE
-    global CONNECTED_REALM_DETAIL
-    global REALM_NAME
-    global CONNECTED_REALMS_ID
-
     if message.content.startswith(bot_character):
         data = {'grant_type': 'client_credentials'}
         token_auth = requests.post('https://eu.battle.net/oauth/token', data=data,
@@ -216,77 +209,96 @@ async def on_message(message):
         token_auth = token_auth.json()
         wow_api_key = token_auth["access_token"]
 
-        item_search = message.content.replace(bot_auction, "")
+        if os.path.isfile('active_realm_info.json'):
+            json_file = open('active_realm_info.json')
+            connected_realm_detail = json.load(json_file)
 
-        if "'" in item_search:
-            item_search = item_search.replace("'", "’")
-            item_search_update = item_search.replace(" ", "&")
+            item_search = message.content.replace(bot_auction, "")
 
+            if "'" in item_search:
+                item_search = item_search.replace("'", "’")
+                item_search_update = item_search.replace(" ", "&")
+
+            else:
+                item_search = '{}'.format(item_search)
+                item_search_update = item_search.replace(" ", "&")
+
+            url = "https://eu.api.blizzard.com/data/wow/search/item?" \
+                  "namespace=static-eu&locale=fr_FR&name.fr_FR={}&orderby=level&_page=1&_pageSize=1000&" \
+                  "access_token={}".format(item_search_update, wow_api_key)
+            header = {"Accept": "application/json"}
+
+            resp = requests.get(url, headers=header)
+            item_results = resp.json()
+            choices = []
+
+            for item in item_results["results"]:
+                choices.append(item["data"]["name"]["fr_FR"])
+            result = process.extract(item_search, choices, limit=1)
+            result_text = result[0][0]
+            print(result_text)
+            result_pourcentage = result[0][-1]
+            print(result_pourcentage)
+
+            item_found = False
+            for item in item_results["results"]:
+                if item["data"]["name"]["fr_FR"] == result_text and result_pourcentage >= 90:
+                    item_found = True
+                    print(item["data"]["name"]["fr_FR"])
+                    recap += item["data"]["name"]["fr_FR"] + "\n"
+                    print(item["data"]["media"]["id"])
+
+                    url = "https://eu.api.blizzard.com/data/wow/connected-realm/{}/auctions" \
+                          "?namespace=dynamic-eu&locale=fr_FR&access_token={}"\
+                        .format(connected_realm_detail["realm"]["connected_realms_id"], wow_api_key)
+                    header = {"Accept": "application/json"}
+
+                    resp = requests.get(url, headers=header)
+                    auction_results = resp.json()
+                    price = 99999999999999999
+                    price_dict = []
+                    gold = ""
+                    for auction in auction_results["auctions"]:
+                        if auction["item"]["id"] == item["data"]["media"]["id"]:
+                            if "unit_price" in auction.keys():
+                                if auction["unit_price"] < price:
+                                    price = auction["unit_price"]
+                            if "buyout" in auction.keys():
+                                if auction["buyout"] < price:
+                                    price = auction["buyout"]
+                    for digit in str(price):
+                        price_dict.append(digit)
+                    copper = "{}{}".format(price_dict[-2], price_dict[-1])
+                    price_dict.pop(-1)
+                    price_dict.pop(-1)
+                    silver = "{}{}".format(price_dict[-2], price_dict[-1])
+                    price_dict.pop(-1)
+                    price_dict.pop(-1)
+                    for gold_digit in price_dict:
+                        gold += gold_digit
+                    print("{} po, {} pa, {} pc".format(gold, silver, copper))
+                    recap += "{} po, {} pa, {} pc".format(gold, silver, copper)
+                elif item_found is False:
+                    recap = "item not found"
+            await message.channel.send("```css\n" + recap + "\n```")
         else:
-            item_search = '{}'.format(item_search)
-            item_search_update = item_search.replace(" ", "&")
-
-        url = "https://eu.api.blizzard.com/data/wow/search/item?" \
-              "namespace=static-eu&locale=fr_FR&name.fr_FR={}&orderby=level&_page=1&_pageSize=1000&access_token={}" \
-            .format(item_search_update, wow_api_key)
-        header = {"Accept": "application/json"}
-
-        resp = requests.get(url, headers=header)
-        item_results = resp.json()
-        choices = []
-
-        for item in item_results["results"]:
-            choices.append(item["data"]["name"]["fr_FR"])
-        result = process.extract(item_search, choices, limit=1)
-        result_text = result[0][0]
-        print(result_text)
-        result_pourcentage = result[0][-1]
-        print(result_pourcentage)
-        for item in item_results["results"]:
-            if item["data"]["name"]["fr_FR"] == result_text and result_pourcentage >= 90:
-
-                print(item["data"]["name"]["fr_FR"])
-                recap += item["data"]["name"]["fr_FR"] + "\n"
-                print(item["data"]["media"]["id"])
-
-                url = "https://eu.api.blizzard.com/data/wow/connected-realm/{}/auctions" \
-                      "?namespace=dynamic-eu&locale=fr_FR&access_token={}".format(CONNECTED_REALMS_ID, wow_api_key)
-                header = {"Accept": "application/json"}
-
-                resp = requests.get(url, headers=header)
-                auction_results = resp.json()
-                price = 99999999999999999
-                price_dict = []
-                gold = ""
-                for auction in auction_results["auctions"]:
-                    if auction["item"]["id"] == item["data"]["media"]["id"]:
-                        if "unit_price" in auction.keys():
-                            if auction["unit_price"] < price:
-                                price = auction["unit_price"]
-                        if "buyout" in auction.keys():
-                            if auction["buyout"] < price:
-                                price = auction["buyout"]
-                for digit in str(price):
-                    price_dict.append(digit)
-                copper = "{}{}".format(price_dict[-2], price_dict[-1])
-                price_dict.pop(-1)
-                price_dict.pop(-1)
-                silver = "{}{}".format(price_dict[-2], price_dict[-1])
-                price_dict.pop(-1)
-                price_dict.pop(-1)
-                for gold_digit in price_dict:
-                    gold += gold_digit
-                print("{} po, {} pa, {} pc".format(gold, silver, copper))
-                recap += "{} po, {} pa, {} pc".format(gold, silver, copper)
-            elif item["data"]["name"]["fr_FR"] != result_text or result_pourcentage < 90:
-                recap = "item not found"
-        await message.channel.send("```css\n" + recap + "\n```")
+            await message.channel.send("```css\n No server set, please set one\n```")
 
     elif message.content.startswith(set_realm):
         realm_search = message.content.replace(set_realm, "")
 
-        if CONNECTED_REALMS_INDEX_UPDATE is None or date.today() > (
-                CONNECTED_REALMS_INDEX_UPDATE + relativedelta(days=+7)):
+        connected_realm_detail = {}
+
+        if os.path.isfile('connected_realm_index.json'):
+            json_file = open('connected_realm_index.json')
+            connected_realm_detail = json.load(json_file)
+            file_exist = True
+
+        else:
+            file_exist = False
+        if file_exist is False or "last_update" not in connected_realm_detail or datetime.today() > (
+                parse(connected_realm_detail["last_update"]) + relativedelta(days=+7)):
+            connected_realm_detail = {"last_update": "{}".format(datetime.today()), "connected_realms": []}
             data = {'grant_type': 'client_credentials'}
             token_auth = requests.post('https://eu.battle.net/oauth/token', data=data,
                                        auth=(wow_api_client_id, wow_api_client_secret))
@@ -311,20 +323,26 @@ async def on_message(message):
                 header = {"Accept": "application/json"}
 
                 resp = requests.get(url, headers=header)
-                CONNECTED_REALM_DETAIL.append(resp.json())
-                CONNECTED_REALMS_INDEX_UPDATE = date.today()
-
-        for realms in CONNECTED_REALM_DETAIL:
+                connected_realm_detail["connected_realms"].append(resp.json())
+            with open('connected_realm_index.json', 'w') as connected_realms_index_file:
+                json.dump(connected_realm_detail, connected_realms_index_file)
+        server_set = False
+        for realms in connected_realm_detail["connected_realms"]:
             for realm in realms["realms"]:
                 if realm["name"] == realm_search:
-                    REALM_NAME = realm["slug"]
-                    CONNECTED_REALMS_ID = realms["id"]
+                    data = {"realm": {'name': realm["name"],
+                                      'slug': realm["slug"],
+                                      'id': "",
+                                      'connected_realms_id': realms["id"]}}
                     recap = "Server set"
+                    with open('active_realm_info.json', 'w') as active_realm_info_file:
+                        json.dump(data, active_realm_info_file)
+                    server_set = True
                     break
             if realm["name"] == realm_search:
                 break
 
-        if CONNECTED_REALMS_ID is None or REALM_NAME is None:
+        if server_set is False:
             recap = "Server not found"
 
         await message.channel.send("```css\n" + recap + "\n```")
