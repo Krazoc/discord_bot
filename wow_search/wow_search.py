@@ -1,3 +1,7 @@
+from datetime import date
+from dateutil.relativedelta import relativedelta
+from fuzzywuzzy import process
+
 import discord
 import os
 import requests
@@ -5,29 +9,39 @@ import requests
 from discord.ext.commands import Bot
 from re import sub
 
+CONNECTED_REALMS_INDEX_UPDATE = None
+CONNECTED_REALM_DETAIL = []
+CONNECTED_REALMS_ID = None
+REALM_NAME = None
 description = "WoW Search"
-bot_prefix = "wow-c!"
-bot_prefix2 = "wow-g!"
-bot_prefix3 = "wow-a!"
-bot_prefix_help = "wow-help!"
-bot_prefix_coincoin = "coincoin!"
+bot_character = "wow-character!"
+bot_guild = "wow-guild!"
+bot_affix = "wow-affix!"
+bot_auction = "wow-auction!"
+bot_help = "wow-help!"
+set_realm = "wow-realm!"
 discord_token = os.environ.get("DISCORD_TOKEN")
 wow_api_client_id = os.environ.get("WOW_API_CLIENT_ID")
 wow_api_client_secret = os.environ.get("WOW_API_CLIENT_SECRET")
 Client = discord.Client()
-client = Bot(command_prefix=bot_prefix, description=description)
+client = Bot(command_prefix=bot_character, description=description)
 
 
 @client.event
 async def on_message(message):
-    if message.content.startswith(bot_prefix):
+    global CONNECTED_REALMS_INDEX_UPDATE
+    global CONNECTED_REALM_DETAIL
+    global REALM_NAME
+    global CONNECTED_REALMS_ID
+
+    if message.content.startswith(bot_character):
         data = {'grant_type': 'client_credentials'}
         token_auth = requests.post('https://eu.battle.net/oauth/token', data=data,
                                    auth=(wow_api_client_id, wow_api_client_secret))
         token_auth = token_auth.json()
         wow_api_key = token_auth["access_token"]
 
-        player_name = message.content.replace(bot_prefix, "")
+        player_name = message.content.replace(bot_character, "")
         player_name = sub(r"/.*", "", player_name)
         realm = sub(".*/", "", message.content)
 
@@ -89,19 +103,15 @@ async def on_message(message):
         count = 0
         mythic_result = {}
         mythic_progress = "\n#Mythic_progress : \n"
-
         for mythic_index in mythic_indexs:
             if mythic_index in player_result["achievements"]["criteria"]:
                 index = player_result["achievements"]["criteria"].index(mythic_index)
                 mythic_result[count] = str(player_result["achievements"]["criteriaQuantity"][index])
                 count += 1
-
             else:
                 mythic_result[count] = "0"
                 count += 1
-
         count = 0
-
         for mythic_difficulty in mythic_difficulties:
             mythic_progress = mythic_progress + mythic_difficulty + mythic_result[count]
             count += 1
@@ -134,20 +144,20 @@ async def on_message(message):
 
         # ======================================================================================================================
 
-        await client.send_message(message.channel, "```css\n" + "#Player_name = " + str(player_name) +
-                                  "\n#Realm = " + str(realm) +
-                                  "\n#Battlegroup = " + str(battle_group) + "\n\n" +
-                                  armory_link + "\n```css" + "\n" +
-                                  "#Equiped_ilvl = " + str(average_item_level_equipped) +
-                                  "\n#Average_ilvl = " + str(average_item_level) + "\n" +
-                                  stat_arena + "\n" +
-                                  mythic_score_print + "\n" +
-                                  stat_raid + "```")
+        await message.channel.send("```css\n" + "#Player_name = " + str(player_name) +
+                                   "\n#Realm = " + str(realm) +
+                                   "\n#Battlegroup = " + str(battle_group) + "\n\n" +
+                                   armory_link + "\n```css" + "\n" +
+                                   "#Equiped_ilvl = " + str(average_item_level_equipped) +
+                                   "\n#Average_ilvl = " + str(average_item_level) + "\n" +
+                                   stat_arena + "\n" +
+                                   mythic_score_print + "\n" +
+                                   stat_raid + "```")
 
     # ======================================================================================================================
 
-    elif message.content.startswith(bot_prefix2):
-        guild_name = message.content.replace(bot_prefix2, "")
+    elif message.content.startswith(bot_guild):
+        guild_name = message.content.replace(bot_guild, "")
         guild_name = sub(r"/.*", "", guild_name)
         realm = sub(".*/", '', message.content)
         url = "https://raider.io/api/v1/guilds/profile?region=EU&realm=" + \
@@ -175,9 +185,9 @@ async def on_message(message):
             prog_raid = prog_raid + raid + "\n #Progression = " + str(
                 guild_result["raid_progression"][raid]["summary"]) + "\n"
 
-        await client.send_message(message.channel, "```css" + "\n" + rank_raid + "\n" + prog_raid + "```")
+        await message.channel.send("```css" + "\n" + rank_raid + "\n" + prog_raid + "```")
 
-    elif message.content.startswith(bot_prefix3):
+    elif message.content.startswith(bot_affix):
         report_affixes = ""
         url = "https://raider.io/api/v1/mythic-plus/affixes?region=eu&locale=en"
         week_affixes = requests.get(url).json()
@@ -185,20 +195,138 @@ async def on_message(message):
         for affix_detail in week_affixes["affix_details"]:
             report_affixes += ("#" + affix_detail["name"] + "\n" + affix_detail["description"] + "\n\n")
 
-        await client.send_message(message.channel, "```css\n" + report_affixes + "\n```")
+        await message.channel.send("```css\n" + report_affixes + "\n```")
 
-    elif message.content.startswith(bot_prefix_help):
-        help_message = "Find a WoW character : wow-c!character_name/realm_name\n\n" \
-                       "Find a WoW guild : wow-g!guild_name/realm_name\n\n" \
+    elif message.content.startswith(bot_help):
+        help_message = "Find a WoW character : wow-character!character_name/realm_name\n\n" \
+                       "Find a WoW guild : wow-guild!guild_name/realm_name\n\n" \
+                       "Find a WoW price : wow-auction!item_name\n\n" \
                        "Dash and space can be included in the realm_name and guild_name.\n\n" \
                        "If you want to participate or to report any problem, please go to " \
                        "https://github.com/Krazoc/discord_bot/blob/master/wow_search/wow_search.py"
 
-        await client.send_message(message.channel, help_message)
+        await message.channel.send(help_message)
 
-    elif message.content.startswith(bot_prefix_coincoin):
-        url = "https://www.youtube.com/watch?v=FSoQNtU-MFA"
-        await client.send_message(message.channel, url)
+    elif message.content.startswith(bot_auction):
+        data = {'grant_type': 'client_credentials'}
+        token_auth = requests.post('https://eu.battle.net/oauth/token', data=data,
+                                   auth=(wow_api_client_id, wow_api_client_secret))
 
+        recap = ""
+        token_auth = token_auth.json()
+        wow_api_key = token_auth["access_token"]
+
+        item_search = message.content.replace(bot_auction, "")
+
+        if "'" in item_search:
+            item_search = item_search.replace("'", "’")
+            item_search_update = item_search.replace(" ", "&")
+
+        else:
+            item_search = '{}'.format(item_search)
+            item_search_update = item_search.replace(" ", "&")
+
+        url = "https://eu.api.blizzard.com/data/wow/search/item?" \
+              "namespace=static-eu&locale=fr_FR&name.fr_FR={}&orderby=level&_page=1&_pageSize=1000&access_token={}" \
+            .format(item_search_update, wow_api_key)
+        header = {"Accept": "application/json"}
+
+        resp = requests.get(url, headers=header)
+        item_results = resp.json()
+        choices = []
+
+        for item in item_results["results"]:
+            choices.append(item["data"]["name"]["fr_FR"])
+        result = process.extract(item_search, choices, limit=1)
+        result_text = result[0][0]
+        print(result_text)
+        result_pourcentage = result[0][-1]
+        print(result_pourcentage)
+        for item in item_results["results"]:
+            if item["data"]["name"]["fr_FR"] == result_text and result_pourcentage >= 90:
+
+                print(item["data"]["name"]["fr_FR"])
+                recap += item["data"]["name"]["fr_FR"] + "\n"
+                print(item["data"]["media"]["id"])
+
+                url = "https://eu.api.blizzard.com/data/wow/connected-realm/{}/auctions" \
+                      "?namespace=dynamic-eu&locale=fr_FR&access_token={}".format(CONNECTED_REALMS_ID, wow_api_key)
+                header = {"Accept": "application/json"}
+
+                resp = requests.get(url, headers=header)
+                auction_results = resp.json()
+                price = 99999999999999999
+                price_dict = []
+                gold = ""
+                for auction in auction_results["auctions"]:
+                    if auction["item"]["id"] == item["data"]["media"]["id"]:
+                        if "unit_price" in auction.keys():
+                            if auction["unit_price"] < price:
+                                price = auction["unit_price"]
+                        if "buyout" in auction.keys():
+                            if auction["buyout"] < price:
+                                price = auction["buyout"]
+                for digit in str(price):
+                    price_dict.append(digit)
+                copper = "{}{}".format(price_dict[-2], price_dict[-1])
+                price_dict.pop(-1)
+                price_dict.pop(-1)
+                silver = "{}{}".format(price_dict[-2], price_dict[-1])
+                price_dict.pop(-1)
+                price_dict.pop(-1)
+                for gold_digit in price_dict:
+                    gold += gold_digit
+                print("{} po, {} pa, {} pc".format(gold, silver, copper))
+                recap += "{} po, {} pa, {} pc".format(gold, silver, copper)
+            elif item["data"]["name"]["fr_FR"] != result_text or result_pourcentage < 90:
+                recap = "item not found"
+        await message.channel.send("```css\n" + recap + "\n```")
+
+    elif message.content.startswith(set_realm):
+        realm_search = message.content.replace(set_realm, "")
+
+        if CONNECTED_REALMS_INDEX_UPDATE is None or date.today() > (
+                CONNECTED_REALMS_INDEX_UPDATE + relativedelta(days=+7)):
+            data = {'grant_type': 'client_credentials'}
+            token_auth = requests.post('https://eu.battle.net/oauth/token', data=data,
+                                       auth=(wow_api_client_id, wow_api_client_secret))
+            token_auth = token_auth.json()
+            wow_api_key = token_auth["access_token"]
+
+            url = "https://eu.api.blizzard.com/data/wow/connected-realm/index" \
+                  "?namespace=dynamic-eu&locale=fr_FR&access_token={}".format(wow_api_key)
+
+            header = {"Accept": "application/json"}
+
+            resp = requests.get(url, headers=header)
+            connected_realms_index = resp.json()
+
+            for connected_realm in connected_realms_index["connected_realms"]:
+                connected_realm_id = connected_realm["href"].replace(
+                    "https://eu.api.blizzard.com/data/wow/connected-realm/", "") \
+                    .replace("?namespace=dynamic-eu", "")
+                url = "https://eu.api.blizzard.com/data/wow/connected-realm/{}" \
+                      "?namespace=dynamic-eu&locale=fr_FR&access_token={}".format(connected_realm_id, wow_api_key)
+
+                header = {"Accept": "application/json"}
+
+                resp = requests.get(url, headers=header)
+                CONNECTED_REALM_DETAIL.append(resp.json())
+                CONNECTED_REALMS_INDEX_UPDATE = date.today()
+
+        for realms in CONNECTED_REALM_DETAIL:
+            for realm in realms["realms"]:
+                if realm["name"] == realm_search:
+                    REALM_NAME = realm["slug"]
+                    CONNECTED_REALMS_ID = realms["id"]
+                    recap = "Server set"
+                    break
+            if realm["name"] == realm_search:
+                break
+
+        if CONNECTED_REALMS_ID is None or REALM_NAME is None:
+            recap = "Server not found"
+
+        await message.channel.send("```css\n" + recap + "\n```")
 
 client.run(discord_token)
