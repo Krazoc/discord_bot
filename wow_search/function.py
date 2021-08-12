@@ -39,15 +39,11 @@ def wow_character(message):
     average_item_level = player_result["items"]["averageItemLevel"]
     average_item_level_equipped = player_result["items"]["averageItemLevelEquipped"]
 
-    # ======================================================================================================================
-
     realm_battlenet = str(realm)
     realm_battlenet = realm_battlenet.replace("'", "")
     realm_battlenet = realm_battlenet.replace("-", "")
     armory_link = "#Armory_link : ```https://worldofwarcraft.com/fr-fr/character/{}/{}".format(realm_battlenet,
                                                                                                player_name)
-
-    # ======================================================================================================================
 
     stat_arena = "\n#Arena_rating :\n"
     pvp_modes = ["ARENA_BRACKET_2v2_SKIRMISH", "ARENA_BRACKET_2v2", "ARENA_BRACKET_3v3", "ARENA_BRACKET_RBG"]
@@ -55,8 +51,6 @@ def wow_character(message):
         rank_name = player_result["pvp"]["brackets"][pvp_mode]["slug"]
         rank = player_result["pvp"]["brackets"][pvp_mode]["rating"]
         stat_arena += "{} : '{}'    ".format(rank_name, rank)
-
-    # ======================================================================================================================
 
     raids = ["Uldir", "Bataille de Dazar’alor"]
     stat_raid = "\n#Raids_progress : \n"
@@ -78,7 +72,6 @@ def wow_character(message):
                         player_result["progression"]["raids"][i]["bosses"])), kill_difficulty)
         stat_raid += "\n"
 
-    # ======================================================================================================================
     """
     mythic_indexs = 33097, 33098, 32028
     mythic_difficulties = "||  +5 = ", "  ||  +10 = ", "  ||  +15 = "
@@ -98,7 +91,6 @@ def wow_character(message):
         mythic_progress = mythic_progress + mythic_difficulty + mythic_result[count]
         count += 1
     """
-    # ======================================================================================================================
 
     url = "https://raider.io/api/v1/characters/profile?region=EU&realm={}&name={}&fields=mythic_plus_scores" \
         .format(realm, player_name)
@@ -132,9 +124,6 @@ def wow_character(message):
             stat_arena + "\n" + \
             mythic_score_print + "\n" + \
             stat_raid
-
-    # ======================================================================================================================
-
     return recap
 
 
@@ -328,7 +317,7 @@ def wow_realm(message):
     return recap
 
 
-def wow_token(message):
+def wow_token():
     wow_api_key = token_authentification()
 
     url = "https://eu.api.blizzard.com/data/wow/token/index?namespace=dynamic-eu&locale=fr_FR&access_token={}" \
@@ -340,6 +329,7 @@ def wow_token(message):
     price_dict = []
     gold = ""
     recap = "WoW Token\n"
+    print(recap)
 
     for digit in str(token_info["price"]):
         price_dict.append(digit)
