@@ -1,5 +1,3 @@
-from discord.ext.commands import Bot
-
 import discord
 import os
 
@@ -7,8 +5,7 @@ from function import wow_character, wow_guild, wow_affix, wow_help, wow_auction,
 
 description = "WoW Search"
 discord_token = os.environ.get("DISCORD_TOKEN")
-Client = discord.Client()
-client = Bot(command_prefix="\\", description=description)
+client = discord.Client()
 
 
 @client.event
