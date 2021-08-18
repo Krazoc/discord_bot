@@ -27,31 +27,30 @@ def wow_character(message):
 
     wow_api_key = token_authentification()
 
-    url = "https://eu.api.blizzard.com/wow/character/{}/{}?" \
-          "locale=fr_FR&access_token={}&fields=items%2Cprogression%2Cachievements%2Cpvp" \
+    url = "https://eu.api.blizzard.com/profile/wow/character/{}/{}?" \
+          "namespace=profile-eu&locale=fr_FR&access_token={}" \
         .format(realm, player_name, wow_api_key)
     header = {"Accept": "application/json"}
 
     resp = requests.get(url, headers=header)
     player_result = resp.json()
 
-    battle_group = player_result["battlegroup"]
-    average_item_level = player_result["items"]["averageItemLevel"]
-    average_item_level_equipped = player_result["items"]["averageItemLevelEquipped"]
+    average_item_level = player_result["average_item_level"]
+    average_item_level_equipped = player_result["equipped_item_level"]
 
     realm_battlenet = str(realm)
     realm_battlenet = realm_battlenet.replace("'", "")
     realm_battlenet = realm_battlenet.replace("-", "")
     armory_link = "#Armory_link : ```https://worldofwarcraft.com/fr-fr/character/{}/{}".format(realm_battlenet,
                                                                                                player_name)
-
+    """
     stat_arena = "\n#Arena_rating :\n"
     pvp_modes = ["ARENA_BRACKET_2v2_SKIRMISH", "ARENA_BRACKET_2v2", "ARENA_BRACKET_3v3", "ARENA_BRACKET_RBG"]
     for pvp_mode in pvp_modes:
         rank_name = player_result["pvp"]["brackets"][pvp_mode]["slug"]
         rank = player_result["pvp"]["brackets"][pvp_mode]["rating"]
         stat_arena += "{} : '{}'    ".format(rank_name, rank)
-
+    
     raids = ["Uldir", "Bataille de Dazar’alor"]
     stat_raid = "\n#Raids_progress : \n"
     kill_difficulties = "normalKills", "heroicKills", "mythicKills"
@@ -71,27 +70,37 @@ def wow_character(message):
                     stat_raid += "'{}/{}' {}    ".format(str(kill_count), str(len(
                         player_result["progression"]["raids"][i]["bosses"])), kill_difficulty)
         stat_raid += "\n"
+    
+    url = "https://eu.api.blizzard.com/profile/wow/character/{}/{}/achievements?" \
+          "namespace=profile-eu&locale=fr_FR&access_token={}" \
+        .format(realm, player_name, wow_api_key)
+    header = {"Accept": "application/json"}
 
-    """
+    resp = requests.get(url, headers=header)
+    player_achievements_results = resp.json()
     mythic_indexs = 33097, 33098, 32028
     mythic_difficulties = "||  +5 = ", "  ||  +10 = ", "  ||  +15 = "
     count = 0
     mythic_result = {}
     mythic_progress = "\n#Mythic_progress : \n"
     for mythic_index in mythic_indexs:
-        if mythic_index in player_result["achievements"]["criteria"]:
-            index = player_result["achievements"]["criteria"].index(mythic_index)
-            mythic_result[count] = str(player_result["achievements"]["criteriaQuantity"][index])
-            count += 1
-        else:
-            mythic_result[count] = "0"
-            count += 1
+        for player_achievements_result in player_achievements_results["achievements"]:
+            print(player_achievements_result)
+            if "criteria" in player_achievements_result:
+                if mythic_index in player_achievements_result["criteria"]:
+                    index = player_achievements_result["criteria"].index(mythic_index)
+                    mythic_result[count] = str(player_achievements_result["criteriaQuantity"][index])
+                    count += 1
+                else:
+                    mythic_result[count] = "0"
+                    count += 1
     count = 0
     for mythic_difficulty in mythic_difficulties:
         mythic_progress = mythic_progress + mythic_difficulty + mythic_result[count]
         count += 1
-    """
 
+    print(mythic_progress)
+    """
     url = "https://raider.io/api/v1/characters/profile?region=EU&realm={}&name={}&fields=mythic_plus_scores" \
         .format(realm, player_name)
 
@@ -117,13 +126,11 @@ def wow_character(message):
         count += 1
 
     recap = "#Player_name = " + str(player_name) + \
-            "\n#Realm = " + str(realm) + \
-            "\n#Battlegroup = " + str(battle_group) + "\n\n" + armory_link + "\n```css" + "\n" + \
+            "\n#Realm = " + str(realm) + "\n\n" + armory_link + \
+            "\n```css" + "\n" + \
             "#Equiped_ilvl = " + str(average_item_level_equipped) + \
             "\n#Average_ilvl = " + str(average_item_level) + "\n" + \
-            stat_arena + "\n" + \
-            mythic_score_print + "\n" + \
-            stat_raid
+            mythic_score_print + "\n"
     return recap
 
 
@@ -346,7 +353,7 @@ def wow_token():
     return recap
 
 
-async def wow_help():
+def wow_help():
     recap = "Find a WoW character : wow-character!character_name/realm_name\n\n" \
                    "Find a WoW guild : wow-guild!guild_name/realm_name\n\n" \
                    "Find a WoW price : wow-auction!item_name\n\n" \
