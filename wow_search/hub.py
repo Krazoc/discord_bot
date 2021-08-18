@@ -31,7 +31,7 @@ async def on_message(message):
         await message.channel.send("```css\n" + recap + "\n```")
 
     elif message.content.startswith("wow-token!"):
-        recap = wow_token(message)
+        recap = wow_token()
         await message.channel.send("```css\n" + recap + "\n```")
 
     elif message.content.startswith("wow-help!"):
